@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"beautifulyeti/authentication/auth"
+	"beautifulyeti/authentication/internal/auth"
 	"encoding/json"
 	"log/slog"
 	"net/http"

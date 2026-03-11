@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"beautifulyeti/authentication/auth"
+	"beautifulyeti/authentication/internal/auth"
 	"crypto/rand"
 	"encoding/base64"
 	"net/http"

@@ -12,21 +12,21 @@ import (
 
 var (
 	encryptionKey = ferrite.String("ENCRYPTION_KEY", "Key for encryption").
-		Required()
+			Required()
 
 	oidcProviderUrl = ferrite.String("OIDC_PROVIDER_URL", "The OIDC provider URL").
-		Required()
+			Required()
 	oidcRedirectUrl = ferrite.String("OIDC_REDIRECT_URL", "The URL for OIDC callback").
-		Required()
+			Required()
 	oidcClientId = ferrite.String("OIDC_CLIENT_ID", "The application's client ID").
-		Required()
+			Required()
 	oidcClientSecret = ferrite.String("OIDC_CLIENT_SECRET", "The application's client secret").
-		Required()
+				Required()
 
 	redisAddress = ferrite.String("REDIS_ADDRESS", "The address of the Redis server").
-		Required()
+			Required()
 	redisPassword = ferrite.String("REDIS_PASSWORD", "The password of the Redis server").
-		Required()
+			Required()
 )
 
 // Config interface defines the configuration methods.

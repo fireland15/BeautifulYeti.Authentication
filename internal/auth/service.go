@@ -1,14 +1,11 @@
 package auth
 
 import (
-	"beautifulyeti/authentication/config"
+	"beautifulyeti/authentication/internal/config"
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"io"
 	"net/http"
 	"time"
 
@@ -18,13 +15,13 @@ import (
 )
 
 type Service struct {
-	OAuth2Config  *oauth2.Config
-	Verifier      *oidc.IDTokenVerifier
-	redisClient   *redis.Client
-	encryptionKey []byte
+	OAuth2Config      *oauth2.Config
+	Verifier          *oidc.IDTokenVerifier
+	redisClient       *redis.Client
+	encryptionService *EncryptionService
 }
 
-func New(ctx context.Context, cfg config.Config) (*Service, error) {
+func New(ctx context.Context, cfg config.Config, redisClient *redis.Client, encryption *EncryptionService) (*Service, error) {
 	provider, err := oidc.NewProvider(ctx, cfg.OIDCProviderURL())
 	if err != nil {
 		return nil, err
@@ -46,17 +43,15 @@ func New(ctx context.Context, cfg config.Config) (*Service, error) {
 		ClientID: cfg.OIDCClientID(),
 	})
 
-	redisClient := newRedisClient(cfg.RedisAddress(), cfg.RedisPassword())
-
 	return &Service{
-		OAuth2Config:  oauthCfg,
-		Verifier:      verifier,
-		redisClient:   redisClient,
-		encryptionKey: cfg.EncryptionKey(),
+		OAuth2Config:      oauthCfg,
+		Verifier:          verifier,
+		redisClient:       redisClient,
+		encryptionService: encryption,
 	}, nil
 }
 
-func newRedisClient(addr, password string) *redis.Client {
+func NewRedisClient(addr, password string) *redis.Client {
 	return redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: password,
@@ -69,36 +64,6 @@ type TokenData struct {
 	RefreshToken string    `json:"refresh_token"`
 	Expiry       time.Time `json:"expiry"`
 	IDToken      string    `json:"id_token"`
-}
-
-func encryptToken(plaintext string, key []byte) (string, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", err
-	}
-	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
-	return base64.RawURLEncoding.EncodeToString(ciphertext), nil
-}
-
-func decryptToken(ciphertextB64 string, key []byte) (string, error) {
-	ciphertext, err := base64.RawURLEncoding.DecodeString(ciphertextB64)
-	if err != nil {
-		return "", err
-	}
-	block, _ := aes.NewCipher(key)
-	gcm, _ := cipher.NewGCM(block)
-	nonceSize := gcm.NonceSize()
-	nonce, ct := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ct, nil)
-	return string(plaintext), err
 }
 
 func generateSessionID() (string, error) {
@@ -131,7 +96,7 @@ func (s *Service) StoreTokensAndIssueSession(ctx context.Context, w http.Respons
 	}
 
 	// 4. Encrypt
-	encrypted, err := encryptToken(string(tdJSON), s.encryptionKey)
+	encrypted, err := s.encryptionService.EncryptToken(tdJSON)
 	if err != nil {
 		return err
 	}
