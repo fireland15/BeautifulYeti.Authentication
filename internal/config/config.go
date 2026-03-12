@@ -16,6 +16,8 @@ var (
 
 	oidcProviderUrl = ferrite.String("OIDC_PROVIDER_URL", "The OIDC provider URL").
 			Required()
+	oidcProviderLogoutUrl = ferrite.String("OIDC_PROVIDER_LOGOUT_URL", "The OIDC provider URL").
+				Required()
 	oidcRedirectUrl = ferrite.String("OIDC_REDIRECT_URL", "The URL for OIDC callback").
 			Required()
 	oidcClientId = ferrite.String("OIDC_CLIENT_ID", "The application's client ID").
@@ -27,6 +29,8 @@ var (
 			Required()
 	redisPassword = ferrite.String("REDIS_PASSWORD", "The password of the Redis server").
 			Required()
+	sessionCookieName = ferrite.String("SESSION_COOKIE_NAME", "The name of the session cookie.").
+				Required()
 	sharedApiKeys = ferrite.String("SHARED_API_KEYS", "A key value collection of APIs and their keys.").
 			Required()
 )
@@ -35,15 +39,25 @@ var (
 type Config interface {
 	EncryptionKey() []byte
 	OIDCProviderURL() string
+	OIDCProviderLogoutURL() string
 	OIDCRedirectURL() string
 	OIDCClientID() string
 	OIDCClientSecret() string
 	RedisPassword() string
 	RedisAddress() string
+	SessionCookieName() string
 	SharedApiKeys() string
 }
 
 type config struct {
+}
+
+func (c *config) OIDCProviderLogoutURL() string {
+	return oidcProviderLogoutUrl.Value()
+}
+
+func (c *config) SessionCookieName() string {
+	return sessionCookieName.Value()
 }
 
 func (c *config) SharedApiKeys() string {

@@ -3,11 +3,14 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
+
+var ErrTokensNotFound = errors.New("tokens not found")
 
 type TokenCache struct {
 	redisClient *redis.Client
@@ -45,6 +48,9 @@ func (c *TokenCache) Retrieve(ctx context.Context, sessionID string) (*TokenData
 	redisKey := createTokensKey(sessionID)
 	encryptedData, err := c.redisClient.Get(ctx, redisKey).Result()
 	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, ErrTokensNotFound
+		}
 		return nil, fmt.Errorf("getting session tokens from redis: %s", err)
 	}
 

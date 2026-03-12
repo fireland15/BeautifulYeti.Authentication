@@ -19,7 +19,7 @@ import (
 type AccessTokenHandler struct {
 	redisClient  *redis.Client
 	encryption   *auth.EncryptionService
-	apiKeys      *auth.ApiKeys
+	apiKeys      auth.ApiKeys
 	tokenCache   *auth.TokenCache
 	oauthConfig  *oauth2.Config
 	refreshGroup singleflight.Group
@@ -28,7 +28,7 @@ type AccessTokenHandler struct {
 func NewAccessTokenHandler(
 	redisClient *redis.Client,
 	encryption *auth.EncryptionService,
-	apiKeys *auth.ApiKeys,
+	apiKeys auth.ApiKeys,
 	tokenCache *auth.TokenCache,
 	oauthConfig *oauth2.Config,
 ) *AccessTokenHandler {
@@ -65,7 +65,7 @@ func (h *AccessTokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var requestBody struct {
 		SessionID string `json:"sessionId"`
 	}
-	
+
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
