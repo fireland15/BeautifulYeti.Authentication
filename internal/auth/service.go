@@ -5,7 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -15,13 +15,12 @@ import (
 )
 
 type Service struct {
-	OAuth2Config      *oauth2.Config
-	Verifier          *oidc.IDTokenVerifier
-	redisClient       *redis.Client
-	encryptionService *EncryptionService
+	OAuth2Config *oauth2.Config
+	Verifier     *oidc.IDTokenVerifier
+	tokens       *TokenCache
 }
 
-func New(ctx context.Context, cfg config.Config, redisClient *redis.Client, encryption *EncryptionService) (*Service, error) {
+func New(ctx context.Context, cfg config.Config, tokens *TokenCache) (*Service, error) {
 	provider, err := oidc.NewProvider(ctx, cfg.OIDCProviderURL())
 	if err != nil {
 		return nil, err
@@ -44,10 +43,9 @@ func New(ctx context.Context, cfg config.Config, redisClient *redis.Client, encr
 	})
 
 	return &Service{
-		OAuth2Config:      oauthCfg,
-		Verifier:          verifier,
-		redisClient:       redisClient,
-		encryptionService: encryption,
+		OAuth2Config: oauthCfg,
+		Verifier:     verifier,
+		tokens:       tokens,
 	}, nil
 }
 
@@ -89,22 +87,8 @@ func (s *Service) StoreTokensAndIssueSession(ctx context.Context, w http.Respons
 		IDToken:      tokens.IDToken,
 	}
 
-	// 3. Marshal JSON
-	tdJSON, err := json.Marshal(td)
-	if err != nil {
-		return err
-	}
-
-	// 4. Encrypt
-	encrypted, err := s.encryptionService.EncryptToken(tdJSON)
-	if err != nil {
-		return err
-	}
-
-	// 5. Store in Redis
-	err = s.redisClient.Set(ctx, "session:"+sessionID, encrypted, time.Until(tokens.Expiry)+time.Hour).Err()
-	if err != nil {
-		return err
+	if err := s.tokens.Store(ctx, sessionID, &td); err != nil {
+		return fmt.Errorf("error storing sessing tokens: %w", err)
 	}
 
 	// 6. Set session cookie

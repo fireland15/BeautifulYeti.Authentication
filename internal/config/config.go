@@ -27,6 +27,8 @@ var (
 			Required()
 	redisPassword = ferrite.String("REDIS_PASSWORD", "The password of the Redis server").
 			Required()
+	sharedApiKeys = ferrite.String("SHARED_API_KEYS", "A key value collection of APIs and their keys.").
+			Required()
 )
 
 // Config interface defines the configuration methods.
@@ -38,9 +40,14 @@ type Config interface {
 	OIDCClientSecret() string
 	RedisPassword() string
 	RedisAddress() string
+	SharedApiKeys() string
 }
 
 type config struct {
+}
+
+func (c *config) SharedApiKeys() string {
+	return sharedApiKeys.Value()
 }
 
 // EncryptionKey returns the encryption key as a byte slice.

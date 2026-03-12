@@ -22,7 +22,7 @@ This service makes use of a authorization code flow.
 
 To prevent leaking all tokens to APIs, the auth service exposes a secure endpoint to exchange sessionIDs for access tokens. The auth service handles refresh tokens on behalf of the APIs and should return valid access tokens.
 
-The Auth Service exposes `POST https://auth.service.com/access-token` for this purpose. APIs calling this must include a shared secret in the request header `x-api-key`. This secret can be configured for the auth service by setting the `SHARED_API_KEY` environment variable prior to startup. The `SHARED_API_KEY` environment variable should be of the format `name=KEY;name2=KEY2` to enable multiple keys to be used and traced back to specific services.
+The Auth Service exposes `POST https://auth.service.com/access-token` for this purpose. APIs calling this must include a shared secret in the request header `x-api-key`. This secret can be configured for the auth service by setting the `SHARED_API_KEYS` environment variable prior to startup. The `SHARED_API_KEYS` environment variable should be of the format `name=KEY;name2=KEY2` to enable multiple keys to be used and traced back to specific services.
 
 The request body must contain a JSON object of the shape. The sessionId should be retrieved from the request cookie `session` received from the client. 
 
