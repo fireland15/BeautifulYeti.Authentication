@@ -1,0 +1,21 @@
+# Ignore git files
+.git
+.gitignore
+
+# Ignore Go build cache
+bin/
+*.exe
+*.out
+
+# Ignore dependency directories
+vendor/
+
+# Ignore secrets
+.env
+*.key
+*.pem
+secrets/
+config/secrets.yaml
+
+# Ignore OS files
+.DS_Store

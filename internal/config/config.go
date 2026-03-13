@@ -33,6 +33,12 @@ var (
 				Required()
 	sharedApiKeys = ferrite.String("SHARED_API_KEYS", "A key value collection of APIs and their keys.").
 			Required()
+	useDevCerts = ferrite.Bool("USE_DEV_CERTS", "Whether to generate an use self-signed certs.").
+			WithDefault(false).
+			Required()
+	serverAddress = ferrite.String("SERVER_ADDRESS", "The address the server should listen on").
+			WithDefault(":8443").
+			Required()
 )
 
 // Config interface defines the configuration methods.
@@ -47,9 +53,15 @@ type Config interface {
 	RedisAddress() string
 	SessionCookieName() string
 	SharedApiKeys() string
+	UseDevCerts() bool
+	ServerAddress() string
 }
 
 type config struct {
+}
+
+func (c *config) UseDevCerts() bool {
+	return useDevCerts.Value()
 }
 
 func (c *config) OIDCProviderLogoutURL() string {
@@ -99,6 +111,11 @@ func (c *config) RedisPassword() string {
 // RedisAddress returns the Redis address.
 func (c *config) RedisAddress() string {
 	return redisAddress.Value()
+}
+
+// ServerAddress returns the address the server should listen on.
+func (c *config) ServerAddress() string {
+	return serverAddress.Value()
 }
 
 // New returns a new config instance, or errors.
