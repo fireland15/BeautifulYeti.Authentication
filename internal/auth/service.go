@@ -18,6 +18,7 @@ type Service struct {
 	OAuth2Config *oauth2.Config
 	Verifier     *oidc.IDTokenVerifier
 	tokens       *TokenCache
+	cfg          config.Config
 }
 
 func New(ctx context.Context, cfg config.Config, tokens *TokenCache) (*Service, error) {
@@ -46,6 +47,7 @@ func New(ctx context.Context, cfg config.Config, tokens *TokenCache) (*Service, 
 		OAuth2Config: oauthCfg,
 		Verifier:     verifier,
 		tokens:       tokens,
+		cfg:          cfg,
 	}, nil
 }
 
@@ -93,7 +95,7 @@ func (s *Service) StoreTokensAndIssueSession(ctx context.Context, w http.Respons
 
 	// 6. Set session cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     "session_id",
+		Name:     s.cfg.SessionCookieName(),
 		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,

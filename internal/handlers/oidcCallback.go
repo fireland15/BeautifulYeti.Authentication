@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"beautifulyeti/authentication/internal/auth"
+	"encoding/base64"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -23,7 +24,23 @@ func (h *CallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 
 	stateCookie, err := r.Cookie("oidc_state")
-	if err != nil || stateCookie.Value != state {
+	if err != nil || stateCookie.Value == "" {
+		http.Error(w, "missing state cookie", http.StatusBadRequest)
+		return
+	}
+
+	stateJson, err := base64.RawURLEncoding.DecodeString(stateCookie.Value)
+	if err != nil {
+		http.Error(w, "decoding state cookie", http.StatusBadRequest)
+		return
+	}
+
+	var stateValues map[string]string
+	if err := json.Unmarshal(stateJson, &stateValues); err != nil {
+		http.Error(w, "unmarshalling state", http.StatusBadRequest)
+		return
+	}
+	if state != stateValues["state"] {
 		http.Error(w, "invalid state", http.StatusBadRequest)
 		return
 	}
@@ -84,8 +101,13 @@ func (h *CallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(claims)
+	redirectUrl, ok := stateValues["redirect_url"]
+	if ok {
+		w.WriteHeader(http.StatusTemporaryRedirect)
+		w.Header().Set("Location", redirectUrl)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 func deleteCookie(w http.ResponseWriter, name string) {

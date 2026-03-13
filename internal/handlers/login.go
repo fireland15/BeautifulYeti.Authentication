@@ -4,6 +4,7 @@ import (
 	"beautifulyeti/authentication/internal/auth"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -31,9 +32,25 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	stateObj := map[string]interface{}{
+		"state": state,
+	}
+
+	redirectURL := r.URL.Query().Get("redirect_url")
+	if redirectURL != "" {
+		stateObj["redirect_url"] = redirectURL
+	}
+
+	stateBytes, err := json.Marshal(stateObj)
+	if err != nil {
+		http.Error(w, "failed to encode state", http.StatusInternalServerError)
+		return
+	}
+
+	encodedState := base64.RawURLEncoding.EncodeToString(stateBytes)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oidc_state",
-		Value:    state,
+		Value:    encodedState,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,

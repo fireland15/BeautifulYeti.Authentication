@@ -4,8 +4,6 @@ import (
 	"beautifulyeti/authentication/internal/auth"
 	"beautifulyeti/authentication/internal/config"
 	"errors"
-	"fmt"
-	"log/slog"
 	"net/http"
 )
 
@@ -23,35 +21,30 @@ func NewLogoutHandler(cfg config.Config, tokenCache *auth.TokenCache) *LogoutHan
 
 func (h *LogoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(h.cfg.SessionCookieName())
-	var idToken string
-	var sessionID string
-	if err == nil {
-		sessionID = cookie.Value
-		// Clear the cookie
-		http.SetCookie(w, &http.Cookie{
-			Name:   h.cfg.SessionCookieName(),
-			Value:  "",
-			Path:   "/",
-			MaxAge: -1,
-		})
+	if err != nil {
+		if errors.Is(err, http.ErrNoCookie) {
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		} else {
+			http.Error(w, "bad request", http.StatusBadRequest)
+		}
+		return
 	}
 
-	tokens, err := h.tokenCache.Retrieve(r.Context(), sessionID)
-	if err != nil {
-		if !errors.Is(err, auth.ErrTokensNotFound) {
-			w.WriteHeader(http.StatusInternalServerError)
-			slog.Error("failed to retrieve tokens from cache", "err", err)
-			return
-		}
-	} else {
-		idToken = tokens.IDToken
+	sessionID := cookie.Value
+	// Clear the cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:   h.cfg.SessionCookieName(),
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+
+	if err := h.tokenCache.Delete(r.Context(), sessionID); err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
 	}
 
 	endSessionURL := h.cfg.OIDCProviderLogoutURL()
-
-	if idToken != "" {
-		endSessionURL = fmt.Sprintf("%s&id_token_hint=%s", endSessionURL, idToken)
-	}
 
 	http.Redirect(w, r, endSessionURL, http.StatusFound)
 }

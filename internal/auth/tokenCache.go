@@ -67,6 +67,15 @@ func (c *TokenCache) Retrieve(ctx context.Context, sessionID string) (*TokenData
 	return &tokenData, nil
 }
 
+func (c *TokenCache) Delete(ctx context.Context, sessionID string) error {
+	key := createTokensKey(sessionID)
+	err := c.redisClient.Del(ctx, key).Err()
+	if err != nil {
+		return fmt.Errorf("deleting tokens from redis: %w", err)
+	}
+	return nil
+}
+
 func createTokensKey(sessionID string) string {
 	return fmt.Sprintf("session:%s:tokens", sessionID)
 }
