@@ -115,6 +115,7 @@ jobs:
           IMAGE_TAG="${{ needs.build-and-push.outputs.IMAGE_TAG }}"
           REGISTRY="git.beautifulyeti.com"
           ENCRYPTION_KEY="${{ secrets.ENCRYPTION_KEY }}"
+          OIDC_REDIRECT_URL="${{ secrets.OIDC_REDIRECT_URL }}"
           OIDC_CLIENT_ID="${{ secrets.OIDC_CLIENT_ID }}" 
           OIDC_CLIENT_SECRET="${{ secrets.OIDC_CLIENT_SECRET }}"
           REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
@@ -124,7 +125,7 @@ jobs:
           export ENCRYPTION_KEY=$ENCRYPTION_KEY
           export OIDC_PROVIDER_URL=https://auth.beautifulyeti.com/application/o/beautiful-yeti-dev/
           export OIDC_PROVIDER_LOGOUT_URL=https://auth.beautifulyeti.com/application/o/beautiful-yeti-dev/end-session/
-          export OIDC_REDIRECT_URL=https://localhost:8443/oidc-callback
+          export OIDC_REDIRECT_URL=$OIDC_REDIRECT_URL
           export OIDC_CLIENT_ID=$OIDC_CLIENT_ID
           export OIDC_CLIENT_SECRET=$OIDC_CLIENT_SECRET
           export REDIS_PASSWORD=$REDIS_PASSWORD
