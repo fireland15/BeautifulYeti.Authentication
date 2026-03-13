@@ -15,6 +15,7 @@ type CallbackHandler struct {
 func (h *CallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		slog.Info("method not allowed")
 		return
 	}
 
@@ -26,51 +27,60 @@ func (h *CallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	stateCookie, err := r.Cookie("oidc_state")
 	if err != nil || stateCookie.Value == "" {
 		http.Error(w, "missing state cookie", http.StatusBadRequest)
+		slog.Info("state cookie missing")
 		return
 	}
 
 	stateJson, err := base64.RawURLEncoding.DecodeString(stateCookie.Value)
 	if err != nil {
 		http.Error(w, "decoding state cookie", http.StatusBadRequest)
+		slog.Info("failed to decode state cookie")
 		return
 	}
 
 	var stateValues map[string]string
 	if err := json.Unmarshal(stateJson, &stateValues); err != nil {
 		http.Error(w, "unmarshalling state", http.StatusBadRequest)
+		slog.Info("failed to deserialize state")
 		return
 	}
 	if state != stateValues["state"] {
 		http.Error(w, "invalid state", http.StatusBadRequest)
+		slog.Info("state is missing")
 		return
 	}
 
 	nonceCookie, err := r.Cookie("oidc_nonce")
 	if err != nil {
 		http.Error(w, "missing nonce", http.StatusBadRequest)
+		slog.Info("nonce cookie missing")
 		return
 	}
 
 	oauth2Token, err := h.Auth.OAuth2Config.Exchange(ctx, code)
 	if err != nil {
 		http.Error(w, "token exchange failed", http.StatusInternalServerError)
+		slog.Error("auth code exchange failed")
 		return
 	}
 
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
 		http.Error(w, "missing id_token", http.StatusInternalServerError)
+		slog.Error("no id_token in auth code response")
 		return
 	}
 
 	idToken, err := h.Auth.Verifier.Verify(ctx, rawIDToken)
 	if err != nil {
 		http.Error(w, "invalid id_token", http.StatusUnauthorized)
+		slog.Info("received invalid id_token from auth provider")
 		return
 	}
 
 	if idToken.Nonce != nonceCookie.Value {
 		http.Error(w, "invalid nonce", http.StatusUnauthorized)
+		slog.Info("invalid nonce")
 		return
 	}
 
@@ -82,6 +92,7 @@ func (h *CallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if err := idToken.Claims(&claims); err != nil {
 		http.Error(w, "failed to parse claims", http.StatusInternalServerError)
+		slog.Info("could not parse id_token claims")
 		return
 	}
 
@@ -103,6 +114,7 @@ func (h *CallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	redirectUrl, ok := stateValues["redirect_url"]
 	if ok {
+		slog.Info("redirecting user", "location", redirectUrl)
 		w.WriteHeader(http.StatusTemporaryRedirect)
 		w.Header().Set("Location", redirectUrl)
 	} else {
