@@ -3,6 +3,7 @@ name: beautifulyeti.auth
 services:
   api:
     image: ${APP_IMAGE}
+    container_name: by_auth_api
     restart: unless-stopped
     pull_policy: always
     profiles: [ "app" ]
@@ -15,7 +16,7 @@ services:
       OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
-      REDIS_ADDRESS: redis:6379
+      REDIS_ADDRESS: by_auth_redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME}
       SHARED_API_KEYS: ${SHARED_API_KEYS}
@@ -35,6 +36,7 @@ services:
 
   redis:
     image: redis:8.6.1-alpine
+    container_name: by_auth_redis
     restart: unless-stopped
     profiles: [ "infra" ]
     networks:
