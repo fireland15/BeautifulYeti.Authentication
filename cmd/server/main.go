@@ -6,11 +6,9 @@ import (
 	"beautifulyeti/authentication/internal/handlers"
 	"beautifulyeti/authentication/internal/utils"
 	"context"
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -37,12 +35,17 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 func startServer() {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	ctx := context.Background()
 
 	cfg, err := config.New()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to load config", "err", err)
+		os.Exit(1)
 	}
 
 	redisClient := auth.NewRedisClient(cfg.RedisAddress(), cfg.RedisPassword())
@@ -50,7 +53,8 @@ func startServer() {
 	tokenCache := auth.NewTokenCache(redisClient, encryptionService)
 	authSvc, err := auth.New(ctx, cfg, tokenCache)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to initialize auth service", "err", err)
+		os.Exit(1)
 	}
 
 	login := &handlers.LoginHandler{Auth: authSvc}
@@ -67,73 +71,80 @@ func startServer() {
 	mux.Handle("/logout", logoutHandler)
 	mux.Handle("/healthz", healthzHandler)
 
-	// Create server with timeout settings
+	handler := loggingMiddleware(mux)
+
 	server := &http.Server{
 		Addr:         cfg.ServerAddress(),
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  15 * time.Second,
 	}
 
-	// Start server in a goroutine
 	go func() {
-		log.Println("server started on", cfg.ServerAddress())
+		slog.Info("server starting", "addr", cfg.ServerAddress())
 
 		if cfg.UseDevCerts() {
-			log.Println("using dev-certs")
+			slog.Info("using dev self-signed certificates")
 			certFile := "cert.pem"
 			keyFile := "key.pem"
 			if err := utils.GenerateSelfSignedCert(certFile, keyFile); err != nil {
-				log.Fatal("failed to generate self-signed dev certs", err)
+				slog.Error("failed to generate dev certs", "err", err)
+				os.Exit(1)
 			}
 
 			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
-				log.Fatal("server failed to start:", err)
+				slog.Error("server failed to start", "err", err)
+				os.Exit(1)
 			}
 		} else {
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatal("server failed to start:", err)
+				slog.Error("server failed to start", "err", err)
+				os.Exit(1)
 			}
 		}
 	}()
 
-	// Wait for the interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
 
-	log.Println("shutting down server...")
+	slog.Info("server shutting down")
 
-	// Create context with timeout for graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Attempt graceful shutdown
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal("server forced to shutdown:", err)
+		slog.Error("server forced to shutdown", "err", err)
+		os.Exit(1)
 	}
-	log.Println("server exited properly")
+
+	slog.Info("server exited properly")
 }
+
+// loggingMiddleware logs all incoming HTTP requests
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		slog.Info("request completed",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"remote", r.RemoteAddr,
+			"duration", time.Since(start),
+		)
+	})
+}
+
 func checkHealth() {
-	// Flags for optional host/port
-	host := flag.String("host", "localhost", "host to check")
-	port := flag.String("port", "8443", "port to check")
-	insecure := flag.Bool("insecure", true, "skip TLS verification")
+	url := flag.String("url", "http://localhost:8443/healthz", "host to check")
 	flag.Parse()
 
-	url := fmt.Sprintf("https://%s:%s/healthz", *host, *port)
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 	}
 
-	if *insecure {
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client.Transport = tr
-	}
-	resp, err := client.Get(url)
+	resp, err := client.Get(*url)
 	if err != nil {
 		fmt.Println("Health check failed:", err)
 		os.Exit(1)
