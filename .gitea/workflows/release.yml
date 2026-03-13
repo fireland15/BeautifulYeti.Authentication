@@ -1,0 +1,136 @@
+name: Deploy Docker Compose
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  check:
+    runs-on: [build]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Download dependencies
+        run: |
+          echo "Downloading Go modules..."
+          go mod download -x
+
+      - name: Build server
+        run: |
+          echo "Building server..."
+          go build -v ./cmd/server/main.go
+          echo "Build completed successfully"
+
+  build-and-push:
+    needs: check
+    runs-on: [build]
+    outputs:
+      APP_IMAGE_NAME: ${{ steps.set-image.outputs.APP_IMAGE_NAME }}
+      IMAGE_TAG: ${{ steps.set-image.outputs.IMAGE_TAG }}
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set image variables
+        id: set-image
+        run: |
+          IMAGE_TAG="${GITHUB_REF_NAME#v}"
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          APP_IMAGE_NAME="$OWNER_LOWER/beautifulyeti.auth.api"
+          REGISTRY="git.beautifulyeti.com"
+          
+          echo "IMAGE_TAG=$IMAGE_TAG"
+          echo "APP_IMAGE_NAME=$APP_IMAGE_NAME"
+          
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "APP_IMAGE_NAME=$APP_IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "REGISTRY=$REGISTRY" >> $GITHUB_OUTPUT
+
+      - name: Login to Gitea Container Registry
+        run: |
+          echo "${{ secrets.REGISTRY_PAT }}" | docker login git.beautifulyeti.com \
+            -u "${{ secrets.REGISTRY_USERNAME }}" \
+            --password-stdin
+
+      - name: Build Api Image
+        run: |
+          docker build \
+            -t git.beautifulyeti.com/${{ steps.set-image.outputs.APP_IMAGE_NAME }}:${{ steps.set-image.outputs.IMAGE_TAG }} \
+            -t git.beautifulyeti.com/${{ steps.set-image.outputs.APP_IMAGE_NAME }}:latest \
+            -f Dockerfile .
+
+      - name: Push Docker image
+        run: |
+          docker push git.beautifulyeti.com/${{ steps.set-image.outputs.APP_IMAGE_NAME }}:${{ steps.set-image.outputs.IMAGE_TAG }}
+          docker push git.beautifulyeti.com/${{ steps.set-image.outputs.APP_IMAGE_NAME }}:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: [ deploy ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set variables
+        id: vars
+        run: |
+          echo "APP_IMAGE_NAME=${{ needs.build-and-push.outputs.APP_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=${{ needs.build-and-push.outputs.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "REGISTRY=git.beautifulyeti.com" >> $GITHUB_OUTPUT
+          echo "NETWORK_NAME=internal" >> $GITHUB_OUTPUT
+
+      - name: Login to Gitea Container Registry
+        run: |
+          echo "${{ secrets.REGISTRY_PAT }}" | docker login git.beautifulyeti.com \
+            -u "${{ secrets.REGISTRY_USERNAME }}" \
+            --password-stdin
+
+      - name: Pull image
+        run: |
+          docker pull ${{ steps.vars.outputs.REGISTRY }}/${{ steps.vars.outputs.APP_IMAGE_NAME }}:${{ steps.vars.outputs.IMAGE_TAG }}
+
+      - name: Deploy infrastructure
+        run: |
+          export REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
+
+          docker compose --profile infra up -d --wait
+
+      - name: Deploy Docker image
+        run: |
+          APP_IMAGE_NAME="${{ needs.build-and-push.outputs.APP_IMAGE_NAME }}"
+          IMAGE_TAG="${{ needs.build-and-push.outputs.IMAGE_TAG }}"
+          REGISTRY="git.beautifulyeti.com"
+          ENCRYPTION_KEY="${{ secrets.ENCRYPTION_KEY }}"
+          OIDC_CLIENT_ID="${{ secrets.OIDC_CLIENT_ID }}" 
+          OIDC_CLIENT_SECRET="${{ secrets.OIDC_CLIENT_SECRET }}"
+          REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
+          SHARED_API_KEYS="${{ secrets.SHARED_API_KEYS }}" 
+        
+          export APP_IMAGE=$REGISTRY/$APP_IMAGE_NAME:$IMAGE_TAG
+          export ENCRYPTION_KEY=$ENCRYPTION_KEY
+          export OIDC_PROVIDER_URL=https://auth.beautifulyeti.com/application/o/beautiful-yeti-dev/
+          export OIDC_PROVIDER_LOGOUT_URL=https://auth.beautifulyeti.com/application/o/beautiful-yeti-dev/end-session/
+          export OIDC_REDIRECT_URL=https://localhost:8443/oidc-callback
+          export OIDC_CLIENT_ID=$OIDC_CLIENT_ID
+          export OIDC_CLIENT_SECRET=$OIDC_CLIENT_SECRET
+          export REDIS_PASSWORD=$REDIS_PASSWORD
+          export SESSION_COOKIE_NAME=session
+          export SHARED_API_KEYS=$SHARED_API_KEYS
+          export USE_DEV_CERTS=false
+          export SERVER_ADDRESS=:8443
+          
+          docker compose --profile infra --profile app up -d --wait --remove-orphans
