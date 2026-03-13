@@ -115,8 +115,8 @@ func (h *CallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	redirectUrl, ok := stateValues["redirect_url"]
 	if ok {
 		slog.Info("redirecting user", "location", redirectUrl)
-		w.WriteHeader(http.StatusTemporaryRedirect)
 		w.Header().Set("Location", redirectUrl)
+		w.WriteHeader(http.StatusTemporaryRedirect)
 	} else {
 		w.WriteHeader(http.StatusOK)
 	}
