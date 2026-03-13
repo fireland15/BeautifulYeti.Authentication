@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/redis/go-redis/v9"
@@ -43,5 +44,7 @@ func (h *HealthzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.WriteHeader(http.StatusOK)
 	}
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		slog.Error("error encoding json response", "err", err)
+	}
 }

@@ -9,7 +9,9 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -82,7 +84,9 @@ func startServer() {
 			log.Println("using dev-certs")
 			certFile := "cert.pem"
 			keyFile := "key.pem"
-			utils.GenerateSelfSignedCert(certFile, keyFile)
+			if err := utils.GenerateSelfSignedCert(certFile, keyFile); err != nil {
+				log.Fatal("failed to generate self-signed dev certs", err)
+			}
 
 			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
 				log.Fatal("server failed to start:", err)
@@ -134,7 +138,12 @@ func checkHealth() {
 		fmt.Println("Health check failed:", err)
 		os.Exit(1)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			slog.Error("closing body reader", "err", err)
+		}
+	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		fmt.Println("Health check failed: status", resp.Status)
